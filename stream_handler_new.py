@@ -132,7 +132,8 @@ class AmazonQStreamHandler:
                     if not self.message_start_sent:
                         cli_event = build_claude_message_start_event(
                             self.conversation_id or "unknown",
-                            self.model
+                            self.model,
+                            self.input_tokens
                         )
                         yield cli_event
                         self.message_start_sent = True

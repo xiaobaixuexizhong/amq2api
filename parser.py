@@ -166,7 +166,7 @@ def build_claude_sse_event(event_type: str, data: Dict[str, Any]) -> str:
     return f"event: {event_type}\ndata: {json_data}\n\n"
 
 
-def build_claude_message_start_event(conversation_id: str, model: str = "claude-sonnet-4.5") -> str:
+def build_claude_message_start_event(conversation_id: str, model: str = "claude-sonnet-4.5", input_tokens: int = 0) -> str:
     """构建 message_start 事件"""
     data = {
         "type": "message_start",
@@ -178,7 +178,7 @@ def build_claude_message_start_event(conversation_id: str, model: str = "claude-
             "model": model,
             "stop_reason": None,
             "stop_sequence": None,
-            "usage": {"input_tokens": 0, "output_tokens": 0}
+            "usage": {"input_tokens": input_tokens, "output_tokens": 0}
         }
     }
     return build_claude_sse_event("message_start", data)
