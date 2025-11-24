@@ -800,7 +800,7 @@ async def gemini_oauth_callback_post(request: Request):
 
         # 使用固定的 client credentials
         client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-        client_secret = "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"
+        client_secret = "GOCSPX-xxxxxxxxxxxxxxxxxx"
 
         # 交换授权码获取 tokens
         async with httpx.AsyncClient() as client:
@@ -907,7 +907,7 @@ async def gemini_oauth_callback(code: Optional[str] = None, error: Optional[str]
     try:
         # 使用固定的 client credentials
         client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-        client_secret = "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"
+        client_secret = "GOCSPX-xxxxxxxxxxxx"
 
         # 交换授权码获取 tokens
         async with httpx.AsyncClient() as client:
