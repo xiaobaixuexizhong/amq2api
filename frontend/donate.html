@@ -227,6 +227,73 @@
             margin-bottom: 20px;
             opacity: 0.5;
         }
+
+        .manual-input-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #667eea;
+        }
+
+        .manual-input-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        .manual-input-section p {
+            margin-bottom: 15px;
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95em;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .input-group button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            white-space: nowrap;
+        }
+
+        .input-group button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .input-group button:active {
+            transform: translateY(0);
+        }
+
+        .input-group button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -251,6 +318,22 @@
             <button class="donate-button" onclick="startDonation()">
                 ✨ 投喂我的 Gemini 账号
             </button>
+
+            <!-- 手动输入区域 -->
+            <div class="manual-input-section">
+                <h3>🔗 手动提交授权链接</h3>
+                <p>如果弹出窗口被阻止或授权后出现错误，您可以手动复制授权完成后的完整 URL 并粘贴到下方输入框提交。</p>
+                <p style="font-size: 0.85em; color: #999;">示例: http://localhost:8383/oauth-callback-page?state=xxx&code=xxx&scope=xxx</p>
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="manualUrlInput"
+                        placeholder="粘贴授权完成后的完整 URL..."
+                        autocomplete="off"
+                    />
+                    <button onclick="submitManualUrl()" id="submitManualBtn">提交</button>
+                </div>
+            </div>
         </div>
 
         <div class="accounts-card">
@@ -269,7 +352,7 @@
         function startDonation() {
             // 构建 OAuth URL
             const clientId = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-            const redirectUri = `${window.location.origin}/oauth-callback-page`;
+            const redirectUri = 'http://localhost:64312/oauth-callback';
             const scopes = [
                 'https://www.googleapis.com/auth/cloud-platform',
                 'https://www.googleapis.com/auth/userinfo.email',
@@ -560,6 +643,74 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // 手动提交 URL
+        async function submitManualUrl() {
+            const input = document.getElementById('manualUrlInput');
+            const submitBtn = document.getElementById('submitManualBtn');
+            const url = input.value.trim();
+
+            if (!url) {
+                alert('请输入授权完成后的 URL');
+                return;
+            }
+
+            try {
+                // 解析 URL 提取 code 参数
+                const urlObj = new URL(url);
+                const code = urlObj.searchParams.get('code');
+
+                if (!code) {
+                    throw new Error('URL 中未找到授权码 (code 参数)');
+                }
+
+                // 禁用按钮和输入框
+                submitBtn.disabled = true;
+                submitBtn.textContent = '提交中...';
+                input.disabled = true;
+
+                // 提交 code 到后端
+                const response = await fetch('/api/gemini/oauth-callback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || '提交失败');
+                }
+
+                // 成功
+                const accountsList = document.getElementById('accountsList');
+                accountsList.insertAdjacentHTML('afterbegin', `
+                    <div class="success">
+                        ✓ 账号添加成功！感谢你的投喂 🎉
+                    </div>
+                `);
+
+                // 清空输入框
+                input.value = '';
+
+                // 刷新账号列表
+                setTimeout(() => loadAccounts(), 1000);
+
+            } catch (err) {
+                const accountsList = document.getElementById('accountsList');
+                accountsList.insertAdjacentHTML('afterbegin', `
+                    <div class="error">
+                        ❌ ${escapeHtml(err.message)}
+                    </div>
+                `);
+            } finally {
+                // 恢复按钮和输入框
+                submitBtn.disabled = false;
+                submitBtn.textContent = '提交';
+                input.disabled = false;
+            }
         }
 
         // 检查是否有回调参数

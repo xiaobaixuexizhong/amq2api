@@ -531,12 +531,14 @@ async def create_gemini_message(request: Request):
                                     # 调用 fetchAvailableModels 获取最新配额信息
                                     models_data = await token_manager.fetch_available_models(project_id)
 
-                                    # 从 models_data 中提取该模型的 quotaInfo.resetTime
+                                    # 从 models_data 中提取该模型的配额信息
                                     reset_time = None
+                                    remaining_fraction = 0
                                     models = models_data.get("models", {})
                                     if gemini_model in models:
                                         quota_info = models[gemini_model].get("quotaInfo", {})
                                         reset_time = quota_info.get("resetTime")
+                                        remaining_fraction = quota_info.get("remainingFraction", 0)
 
                                     # 如果没有找到 resetTime，使用默认值（1小时后）
                                     if not reset_time:
@@ -558,10 +560,25 @@ async def create_gemini_message(request: Request):
                                     update_account(account['id'], other=other)
                                     logger.info(f"已更新账号 {account['id']} 的配额信息")
 
-                                    # 标记模型配额用完
-                                    mark_model_exhausted(account['id'], gemini_model, reset_time)
-                                    logger.warning(f"账号 {account['id']} 的模型 {gemini_model} 配额已用完，重置时间: {reset_time}")
+                                    # 判断是速率限制还是配额用完
+                                    if remaining_fraction > 0.03:
+                                        # 配额充足，是速率限制（RPM/TPM）
+                                        logger.warning(f"账号 {account['id']} 触发速率限制（RPM/TPM），剩余配额: {remaining_fraction:.2%}")
+                                        raise HTTPException(
+                                            status_code=429,
+                                            detail=f"速率限制：请求过于频繁，请稍后重试（剩余配额: {remaining_fraction:.2%}）"
+                                        )
+                                    else:
+                                        # 配额不足，真的用完了
+                                        mark_model_exhausted(account['id'], gemini_model, reset_time)
+                                        logger.warning(f"账号 {account['id']} 的模型 {gemini_model} 配额已用完（剩余: {remaining_fraction:.2%}），重置时间: {reset_time}")
+                                        raise HTTPException(
+                                            status_code=429,
+                                            detail=f"配额已用完，重置时间: {reset_time}"
+                                        )
 
+                                except HTTPException:
+                                    raise
                                 except Exception as e:
                                     logger.error(f"处理 429 错误时出错: {e}", exc_info=True)
 
@@ -800,7 +817,7 @@ async def gemini_oauth_callback_post(request: Request):
 
         # 使用固定的 client credentials
         client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-        client_secret = "GOCSPX-xxxxxxxxxxxxxxxxxx"
+        client_secret = "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"
 
         # 交换授权码获取 tokens
         async with httpx.AsyncClient() as client:
@@ -811,7 +828,7 @@ async def gemini_oauth_callback_post(request: Request):
                     "client_secret": client_secret,
                     "code": code,
                     "grant_type": "authorization_code",
-                    "redirect_uri": f"{get_base_url()}/oauth-callback-page"
+                    "redirect_uri": "http://localhost:64312/oauth-callback"
                 },
                 headers={
                     'x-goog-api-client': 'gl-node/22.18.0',
@@ -907,7 +924,7 @@ async def gemini_oauth_callback(code: Optional[str] = None, error: Optional[str]
     try:
         # 使用固定的 client credentials
         client_id = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-        client_secret = "GOCSPX-xxxxxxxxxxxx"
+        client_secret = "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"
 
         # 交换授权码获取 tokens
         async with httpx.AsyncClient() as client:
