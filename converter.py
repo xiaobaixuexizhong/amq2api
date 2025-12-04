@@ -176,11 +176,17 @@ def convert_claude_to_codewhisperer_request(
                             for item in amazonq_content
                         )
 
-                        # 如果没有实际内容，添加默认文本
+                        # 如果没有实际内容，根据状态添加默认文本
                         if not has_actual_content:
-                            amazonq_content = [
-                                {"text": "Tool use was cancelled by the user"}
-                            ]
+                            # 如果是成功状态（非错误），使用成功提示
+                            if block.get("status") != "error" and not block.get("is_error"):
+                                amazonq_content = [
+                                    {"text": "Command executed successfully"}
+                                ]
+                            else:
+                                amazonq_content = [
+                                    {"text": "Tool use was cancelled by the user"}
+                                ]
 
                         tool_result = {
                             "toolUseId": block.get("tool_use_id"),
