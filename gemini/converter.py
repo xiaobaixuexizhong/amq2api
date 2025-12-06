@@ -98,16 +98,16 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
             for i, item in enumerate(msg.content):
                 if isinstance(item, dict):
                     if item.get("type") == "thinking":
-                        continue
+                        # continue
                         # # 处理 thinking 内容块
-                        # part = {
-                        #     "text": item.get("thinking", ""),
-                        #     "thought": True
-                        # }
-                        # parts.append(part)
-                        # # 如果有 signature，保存到下一个 item（text 或 tool_use）
-                        # if "signature" in item:
-                        #     pending_signature = item["signature"]
+                        part = {
+                            "text": item.get("thinking", ""),
+                            "thought": True
+                        }
+                        parts.append(part)
+                        # 如果有 signature，保存到下一个 item（text 或 tool_use）
+                        if "signature" in item:
+                            pending_signature = item["signature"]
                     elif item.get("type") == "text":
                         part = {"text": item.get("text", "")}
                         # 如果有待附加的 signature，附加到这个 text part
@@ -169,7 +169,7 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
         })
 
     # 重新组织消息，确保 tool_use 后紧跟对应的 tool_result
-    contents = reorganize_tool_messages(contents)
+    # contents = reorganize_tool_messages(contents)
 
     # 构建 Gemini 请求
     gemini_request = {
