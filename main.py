@@ -622,6 +622,7 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
                         headers=headers
                     ) as response:
                         logger.info(f"[HTTP] 收到响应: status_code={response.status_code}")
+                        logger.info(f"[HTTP] 响应头: {dict(response.headers)}")
                         if response.status_code != 200:
                             error_text = await response.aread()
                             error_str = error_text.decode() if isinstance(error_text, bytes) else str(error_text)
