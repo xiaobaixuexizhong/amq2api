@@ -762,17 +762,29 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
                         if remaining_fraction > 0.03:
                             # 配额充足，是速率限制（RPM/TPM）
                             logger.warning(f"账号 {account['id']} 触发速率限制（RPM/TPM），剩余配额: {remaining_fraction:.2%}")
-                            raise HTTPException(
-                                status_code=429,
-                                detail=f"速率限制：请求过于频繁，请稍后重试（剩余配额: {remaining_fraction:.2%}）"
-                            )
                         else:
                             # 配额不足，真的用完了
                             mark_model_exhausted(account['id'], gemini_model, reset_time)
                             logger.warning(f"账号 {account['id']} 的模型 {gemini_model} 配额已用完（剩余: {remaining_fraction:.2%}），重置时间: {reset_time}")
+
+                        # 尝试切换到另一个可用账号重试
+                        logger.info(f"尝试切换到另一个可用的 Gemini 账号重试...")
+                        new_account = get_random_account(account_type="gemini", model=claude_req.model)
+
+                        if new_account and new_account['id'] != account['id']:
+                            logger.info(f"找到可用账号 {new_account['id']}，正在重试...")
+                            # 通过修改请求头来指定新账号，递归调用
+                            original_account_id = request.headers.get("X-Account-ID")
+                            request._state.account_id = new_account['id']
+                            # 修改请求头
+                            request.scope["headers"] = [(k, v) for k, v in request.scope["headers"] if k != b"x-account-id"]
+                            request.scope["headers"].append((b"x-account-id", new_account['id'].encode()))
+                            return await create_gemini_message(request, _)
+                        else:
+                            logger.warning(f"没有其他可用的 Gemini 账号，返回 429 错误")
                             raise HTTPException(
                                 status_code=429,
-                                detail=f"配额已用完，重置时间: {reset_time}"
+                                detail=f"所有 Gemini 账号都已达到限流或配额用完"
                             )
 
                     except HTTPException:
