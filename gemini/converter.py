@@ -244,9 +244,10 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
         "requestType": "agent"
     }
 
+    system_parts = [{
+                        "text": "You are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**"}]
     # 添加 system instruction
     if claude_req.system:
-        system_parts = [{"text": "You are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**"}]
         # 处理 system 字段（可能是字符串或列表）
         if isinstance(claude_req.system, str):
             # 简单字符串格式
@@ -259,10 +260,10 @@ def convert_claude_to_gemini(claude_req: ClaudeRequest, project: str) -> Dict[st
         # else:
         #     system_parts = [{"text": str(claude_req.system)}]
 
-        gemini_request["request"]["systemInstruction"] = {
-            "role": "user",
-            "parts": system_parts
-        }
+    gemini_request["request"]["systemInstruction"] = {
+        "role": "user",
+        "parts": system_parts
+    }
 
     # 添加工具
     if claude_req.tools:
