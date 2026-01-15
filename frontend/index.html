@@ -512,6 +512,12 @@ function renderAccounts(list) {
       quotaBtn.textContent = '查看配额';
       quotaBtn.onclick = () => viewQuota(acc.id);
       actions.appendChild(quotaBtn);
+
+      const reactivateBtn = document.createElement('button');
+      reactivateBtn.className = 'btn-warning';
+      reactivateBtn.textContent = '重新激活';
+      reactivateBtn.onclick = () => reactivateGeminiAccount(acc.id, acc.label);
+      actions.appendChild(reactivateBtn);
     }
 
     const rateLimitBtn = document.createElement('button');
@@ -1493,6 +1499,32 @@ async function configureRateLimit(acc) {
       alert('保存失败：' + e.message);
     }
   };
+}
+
+async function reactivateGeminiAccount(accountId, label) {
+  if (!confirm(`确认重新激活账号 "${label || accountId.substring(0,8)}"？\n\n这将重新获取 Project ID 并更新 Access Token。`)) {
+    return;
+  }
+
+  setTestStatus(`正在重新激活 ${label}...`, true);
+
+  try {
+    const r = await authFetch(`/v2/accounts/${accountId}/reactivate`, { method: 'POST' });
+    if (!r.ok) {
+      const errText = await r.text();
+      throw new Error(errText);
+    }
+
+    const data = await r.json();
+    setTestStatus(`激活成功`, true);
+    alert(`账号 "${label}" 重新激活成功！\n\n新 Project ID: ${data.project_id}`);
+
+    // 刷新账号列表
+    await loadAccounts();
+  } catch(e) {
+    setTestStatus(`激活失败`, false);
+    alert(`重新激活失败：${e.message}`);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {

@@ -213,7 +213,7 @@ async def create_message(request: Request, _: bool = Depends(verify_api_key)):
         model = request_data.get('model', 'claude-sonnet-4.5')
 
         # 智能路由：根据模型选择渠道
-        specified_account_id = request.headers.get("X-Account-ID")
+        specified_account_id = getattr(request.state, 'account_id', None) or request.headers.get("X-Account-ID")
 
         if specified_account_id:
             # 指定了账号，检查账号类型并路由到对应渠道
@@ -318,7 +318,7 @@ async def create_message(request: Request, _: bool = Depends(verify_api_key)):
 
         # 获取账号和认证头（支持多账号随机选择和单账号回退）
         # 检查是否指定了特定账号（用于测试）
-        specified_account_id = request.headers.get("X-Account-ID")
+        specified_account_id = getattr(request.state, 'account_id', None) or request.headers.get("X-Account-ID")
 
         # 用于重试的变量
         account = None
@@ -571,7 +571,6 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
         claude_req = parse_claude_request(request_data)
 
         # 检查是否指定了特定账号（用于测试）
-        # specified_account_id = request.headers.get("X-Account-ID")
         specified_account_id = getattr(request.state, 'account_id', None) or request.headers.get("X-Account-ID")
 
         if specified_account_id:
@@ -774,12 +773,8 @@ async def create_gemini_message(request: Request, _: bool = Depends(verify_api_k
 
                         if new_account and new_account['id'] != account['id']:
                             logger.info(f"找到可用账号 {new_account['id']}，正在重试...")
-                            # 通过修改请求头来指定新账号，递归调用
-                            original_account_id = request.headers.get("X-Account-ID")
+                            # 通过 request.state 传递新账号 ID，递归调用
                             request.state.account_id = new_account['id']
-                            # 修改请求头
-                            # request.scope["headers"] = [(k, v) for k, v in request.scope["headers"] if k != b"x-account-id"]
-                            # request.scope["headers"].append((b"x-account-id", new_account['id'].encode()))
                             return await create_gemini_message(request, _)
                         else:
                             logger.warning(f"没有其他可用的 Gemini 账号，返回 429 错误")
@@ -971,6 +966,71 @@ async def manual_refresh_endpoint(account_id: str, _: bool = Depends(verify_admi
     except Exception as e:
         logger.error(f"刷新 token 失败: {e}")
         raise HTTPException(status_code=500, detail=f"刷新 token 失败: {str(e)}")
+
+
+@app.post("/v2/accounts/{account_id}/reactivate")
+async def reactivate_gemini_account(account_id: str, _: bool = Depends(verify_admin_key)):
+    """重新激活 Gemini 账号，重新获取 Project ID 并更新 Access Token"""
+    try:
+        account = get_account(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="账号不存在")
+
+        account_type = account.get("type", "amazonq")
+        if account_type != "gemini":
+            raise HTTPException(status_code=400, detail="只有 Gemini 账号支持重新激活")
+
+        # 获取 other 数据
+        other = account.get("other") or {}
+        if isinstance(other, str):
+            import json
+            try:
+                other = json.loads(other)
+            except json.JSONDecodeError:
+                other = {}
+
+        old_project_id = other.get("project", "无")
+        logger.info(f"重新激活 Gemini 账号: {account.get('label', account_id[:8])}，当前 project: {old_project_id}")
+
+        # 创建 TokenManager
+        token_manager = GeminiTokenManager(
+            client_id=account["clientId"],
+            client_secret=account["clientSecret"],
+            refresh_token=account["refreshToken"],
+            api_endpoint=other.get("api_endpoint", "https://cloudcode-pa.googleapis.com")
+        )
+
+        # 获取新的 project_id（会自动调用 onboardUser 如果需要）
+        new_project_id = await token_manager.get_project_id()
+
+        if not new_project_id:
+            raise HTTPException(status_code=500, detail="无法获取 Project ID，请检查账号状态")
+
+        # 更新 other 字段
+        other["project"] = new_project_id
+        other["token_expires_at"] = token_manager.token_expires_at.isoformat() if token_manager.token_expires_at else None
+
+        # 保存到数据库（同时更新 access_token）
+        updated_account = update_account(
+            account_id=account_id,
+            access_token=token_manager.access_token,
+            other=other
+        )
+
+        logger.info(f"✅ Gemini 账号重新激活成功: project {old_project_id} -> {new_project_id}")
+
+        return JSONResponse(content={
+            "success": True,
+            "project_id": new_project_id,
+            "old_project_id": old_project_id,
+            "message": f"账号重新激活成功，Project ID 已更新"
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"重新激活 Gemini 账号失败: {e}")
+        raise HTTPException(status_code=500, detail=f"重新激活失败: {str(e)}")
 
 
 @app.post("/v2/accounts/refresh-all")
@@ -1688,7 +1748,8 @@ def parse_claude_request(data: dict) -> ClaudeRequest:
                 ))
 
     return ClaudeRequest(
-        model=data.get("model", "claude-sonnet-4.5"),
+        # model=data.get("model", "claude-sonnet-4.5"),
+        model = 'claude-opus-4.5',
         messages=messages,
         max_tokens=data.get("max_tokens", 4096),
         temperature=data.get("temperature"),
