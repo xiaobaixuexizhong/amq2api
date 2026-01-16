@@ -1748,8 +1748,8 @@ def parse_claude_request(data: dict) -> ClaudeRequest:
                 ))
 
     return ClaudeRequest(
-        # model=data.get("model", "claude-sonnet-4.5"),
-        model = 'claude-opus-4.5',
+        model=data.get("model", "claude-sonnet-4.5"),
+        # model = 'claude-opus-4.5',
         messages=messages,
         max_tokens=data.get("max_tokens", 4096),
         temperature=data.get("temperature"),
